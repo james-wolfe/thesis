@@ -3,7 +3,6 @@ using DataFrames
 using Random
 using CSV
 using LinearAlgebra
-using Parquet
 
 # This function is the condition a + Lb <= c + Ld. Returns true or false.
 # If true, mutant is accepted.
@@ -92,7 +91,7 @@ function reactive(;
     c::Int64 = 1,
     measure::Float64,
     condition::Function,
-    reps::Int64 = 10^5,
+    reps::Int64 = 10^8,
     epsilon::Float64 = 0.05)
 
   ep_samp = Uniform(-epsilon, epsilon)
@@ -128,6 +127,67 @@ function reactive(;
 end
   return df
 end
+
+# c_rate takes the two parameters of a reactive strategy and returns its
+# cooperation rate
+
+function c_rate(
+    p::Float64,
+    q::Float64)
+  r = p - q
+  s = (q*r + q)/(1-r*r)
+  return s
+end
+
+# reac_summary is similar to reactive, except it returns a dataframe giving
+# the number of times the strategy was in one of 400 squares on the strategy
+# space, and the avg cooperation rate of the resident strategies.
+
+function reac_summary(;
+    u::Float64 = 0.5,
+    b::Int64 = 3,
+    c::Int64 = 1,
+    measure::Float64,
+    condition::Function,
+    reps::Int64 = 10^8,
+    epsilon::Float64 = 0.05)
+
+  ep_samp = Uniform(-epsilon, epsilon)
+  unif = Uniform(0,1)
+  SR = [rand(unif),rand(unif)]
+  df = DataFrame(p = SR[1], q = SR[2], avg = c_rate(SR[1],SR[2]))
+  SM = [0.0,0.0]
+  for i in 2:reps
+    x = rand(unif)
+    if x < u
+      SM = [rand(unif),rand(unif)]
+    else
+        x_ep = rand(ep_samp)
+        y_ep = rand(ep_samp)
+        if (0.0 < SR[1] + x_ep && SR[1] + x_ep < 1.0)
+            SM[1] = SR[1] + x_ep
+        else
+            SM[1] = SR[1]
+        end
+        if (0.0 < SR[2] + y_ep && SR[2] + y_ep < 1.0)
+            SM[2] = SR[2] + y_ep
+        else
+            SM[2] = SR[2]
+        end
+    end
+    if (condition([pr(SR, SR, b, c),
+                    pr(SR, SM, b, c),
+                    pr(SM, SR, b, c),
+                    pr(SM, SM, b, c)], measure) == true)
+      SR = SM
+    end
+    push!(df, [SR[1], SR[2], c_rate(SR[1], SR[2])])
+end
+    avg = mean(df.avg)
+    df = combine(groupby(df, [:p,:q]), nrow => :count)
+    return df, avg
+end
+
 
 # memory_one runs stochastic evolutionary dynamics with the following
 # parameters:
@@ -198,6 +258,22 @@ function memory_one(;
     return df
 end
 
+# avg_coop takes a memory-one strategy vector and returns its cooperation rate.
+
+function avg_coop(A::Vector{Float64})
+    mx1 = [-1.0+A[1]*A[1] -1.0+A[1] -1.0+A[1] 1.0;
+    A[2]*A[3] -1.0+A[2] A[3] 1.0;
+    A[3]*A[2] A[3] -1.0+A[2] 0.0;
+    A[4]*A[4] A[4] A[4] 0.0]
+    mx2 = [-1.0+A[1]*A[1] -1.0+A[1] -1.0+A[1] 1.0;
+    A[2]*A[3] -1.0+A[2] A[3] 1.0;
+    A[3]*A[2] A[3] -1.0+A[2] 1.0;
+    A[4]*A[4] A[4] A[4] 1.0]
+    avg = det(mx1)/det(mx2)
+    return avg
+end
+
+
 # m1_summary is the same as memory_one, except instead of returning a DataFrame
 # of values for the resident strategy, it returns the frequency of each combo
 # of values for the four probability parameters.
@@ -217,7 +293,9 @@ function m1_summary(;
     ep_samp = Uniform(-epsilon, epsilon)
     unif = Uniform(0,1)
     SR = [rand(unif), rand(unif), rand(unif), rand(unif)]
-    df = DataFrame(p1 = SR[1], p2 = SR[2], p3 = SR[3], p4 = SR[4])
+    df = DataFrame(p1 = floor(SR[1]*10)/10, p2 = floor(SR[2]*10)/10,
+                   p3 = floor(SR[3]*10)/10, p4 = floor(SR[4]*10)/10,
+                   avg = avg_coop(SR))
     SM = [0.0,0.0,0.0,0.0]
     for i in 2:reps
         x = rand(unif)
@@ -255,8 +333,10 @@ function m1_summary(;
             payoff(A = SM, B = SM, b = b, c = c)], measure) == true)
             SR = SM
         end
-        push!(df, [floor(SR[1]*10)/10,floor(SR[2]*10)/10,floor(SR[3]*10)/10,floor(SR[4]*10)/10])
+        avg = avg_coop(SR)
+        push!(df, [floor(SR[1]*10)/10,floor(SR[2]*10)/10,floor(SR[3]*10)/10,floor(SR[4]*10)/10,avg])
     end
+    avg = mean(df.avg)
     df = combine(groupby(df, [:p1, :p2, :p3, :p4]), nrow => :count)
-    return df
+    return df, avg
 end

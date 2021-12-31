@@ -3,6 +3,13 @@
 # df is the dataframe with the frequency for each 2d or 4d subset.
 # func is either min or max.
 
+# if looking at mem-one data, the input dataframe should have 5 columns, one 
+# for each parameter and one with the frequency the strategy appeared in that
+# subset, in the order (p1,p2,p3,p4,count)
+
+# if looking at reactive data, the input dataframe should have 3 columns, in the
+# order (p1,q,count)
+
 find_minmax_m1 <- function(df, func){
   vec = c()
   for (i in 1:nrow(df)){

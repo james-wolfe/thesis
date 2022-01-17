@@ -1,7 +1,24 @@
+library(tidyverse)
+
 # Finds the local minima and maxima of the datasets using Moore neighborhood.
 
 # df is the dataframe with the frequency for each 2d or 4d subset.
 # func is either min or max.
+
+# output will be the rows that are minima or maxima. 
+
+# note that this does NOT find the subsets with the lowest or highest frequency,
+# but this can easily be achieved with the following code with df as input:
+
+# lowest freq:
+
+df %>%
+  arrange(count)
+
+# highest freq:
+
+df %>%
+  arrange(desc(count))
 
 # if looking at mem-one data, the input dataframe should have 5 columns, one 
 # for each parameter and one with the frequency the strategy appeared in that
@@ -28,8 +45,13 @@ find_minmax_m1 <- function(df, func){
       vec = c(vec, i)
     }
   }
-  return(vec)
+  return(df[vec,])
 }
+
+# example:
+
+m1_s2_max = find_minmax_m1(m1_s2, max)
+
 
 
 find_minmax_r <- function(df, func){
@@ -46,5 +68,10 @@ find_minmax_r <- function(df, func){
       vec = c(vec, i)
     }
   }
-  return(vec)
+  return(df[vec,])
 }
+
+# ex:
+
+r_s2_max = find_minmax_r(reac_s2, max)
+
